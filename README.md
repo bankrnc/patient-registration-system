@@ -16,6 +16,17 @@ A responsive, real-time patient input form and staff monitoring dashboard built 
 - **Status Indicators** — each session shows `Filling in`, `Inactive` (30s timeout), or `Submitted`
 - **Responsive Design** — works on mobile and desktop for both interfaces
 
+## Bonus Features
+
+| Feature | Description |
+|---------|-------------|
+| **Form completion progress bar** | Each session card on the staff dashboard shows a live percentage bar indicating how many fields the patient has filled in |
+| **Live session counters** | Staff header displays real-time counts of Filling / Submitted / Total sessions |
+| **Multi-patient support** | Staff dashboard tracks unlimited simultaneous patient sessions in a responsive card grid — each browser tab is assigned a unique session UUID via `sessionStorage` |
+| **Real-time onBlur validation** | Phone and email fields validate immediately when the user leaves the field, not only on form submit |
+| **Thai phone format validation** | Accepts Thai mobile numbers (06x/08x/09x), landlines (02–09), and international format (+66) with specific regex — rejects non-Thai formats |
+| **Inactivity auto-detection** | A 30-second idle timer on the patient form automatically broadcasts an `inactive` status to the staff view if the patient stops typing |
+
 ---
 
 ## Tech Stack
