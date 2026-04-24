@@ -128,10 +128,10 @@ export default function PatientForm() {
     let error = "";
     if (field === "phoneNumber") {
       if (!value.trim()) error = "Phone number is required";
-      else if (!isValidThaiPhone(value)) error = "กรุณากรอกเบอร์ไทยที่ถูกต้อง เช่น 081-234-5678 หรือ +66812345678";
+      else if (!isValidThaiPhone(value)) error = "Enter a valid Thai phone number (e.g. 081-234-5678 or +66812345678)";
     }
     if (field === "email" && value) {
-      if (!isValidEmail(value)) error = "กรุณากรอกอีเมลที่ถูกต้อง เช่น example@mail.com";
+      if (!isValidEmail(value)) error = "Enter a valid email address (e.g. example@mail.com)";
     }
     if (error) setErrors((prev) => ({ ...prev, [field]: error }));
   }, []);
@@ -146,10 +146,10 @@ export default function PatientForm() {
     if (!form.phoneNumber.trim()) {
       newErrors.phoneNumber = "Phone number is required";
     } else if (!isValidThaiPhone(form.phoneNumber)) {
-      newErrors.phoneNumber = "กรุณากรอกเบอร์ไทยที่ถูกต้อง เช่น 081-234-5678 หรือ +66812345678";
+      newErrors.phoneNumber = "Enter a valid Thai phone number (e.g. 081-234-5678 or +66812345678)";
     }
     if (form.email && !isValidEmail(form.email)) {
-      newErrors.email = "กรุณากรอกอีเมลที่ถูกต้อง เช่น example@mail.com";
+      newErrors.email = "Enter a valid email address (e.g. example@mail.com)";
     }
     if (!form.address.trim()) newErrors.address = "Address is required";
     if (!form.preferredLanguage)
