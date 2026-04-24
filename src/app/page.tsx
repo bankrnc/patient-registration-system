@@ -114,6 +114,28 @@ export default function PatientForm() {
     };
   }, [triggerPusher, resetInactivityTimer]);
 
+  // Thai mobile: 06x/08x/09x + 7 digits, landline: 02-09 + 6-7 digits, intl: +66x...
+  const isValidThaiPhone = (value: string) => {
+    const digits = value.replace(/[\s\-().]/g, "");
+    return /^(0[689]\d{8}|0[2-57]\d{6,7}|\+66[689]\d{8})$/.test(digits);
+  };
+
+  const isValidEmail = (value: string) => {
+    return /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(value.trim());
+  };
+
+  const validateField = useCallback((field: keyof PatientFormData, value: string) => {
+    let error = "";
+    if (field === "phoneNumber") {
+      if (!value.trim()) error = "Phone number is required";
+      else if (!isValidThaiPhone(value)) error = "กรุณากรอกเบอร์ไทยที่ถูกต้อง เช่น 081-234-5678 หรือ +66812345678";
+    }
+    if (field === "email" && value) {
+      if (!isValidEmail(value)) error = "กรุณากรอกอีเมลที่ถูกต้อง เช่น example@mail.com";
+    }
+    if (error) setErrors((prev) => ({ ...prev, [field]: error }));
+  }, []);
+
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
 
@@ -123,11 +145,11 @@ export default function PatientForm() {
     if (!form.gender) newErrors.gender = "Gender is required";
     if (!form.phoneNumber.trim()) {
       newErrors.phoneNumber = "Phone number is required";
-    } else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phoneNumber)) {
-      newErrors.phoneNumber = "Enter a valid phone number";
+    } else if (!isValidThaiPhone(form.phoneNumber)) {
+      newErrors.phoneNumber = "กรุณากรอกเบอร์ไทยที่ถูกต้อง เช่น 081-234-5678 หรือ +66812345678";
     }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      newErrors.email = "Enter a valid email address";
+    if (form.email && !isValidEmail(form.email)) {
+      newErrors.email = "กรุณากรอกอีเมลที่ถูกต้อง เช่น example@mail.com";
     }
     if (!form.address.trim()) newErrors.address = "Address is required";
     if (!form.preferredLanguage)
@@ -277,16 +299,18 @@ export default function PatientForm() {
                   type="tel"
                   value={form.phoneNumber}
                   onChange={(e) => handleChange("phoneNumber", e.target.value)}
-                  placeholder="+66 8X XXX XXXX"
+                  onBlur={(e) => validateField("phoneNumber", e.target.value)}
+                  placeholder="081-234-5678"
                   className={inputClass(errors.phoneNumber)}
                 />
               </Field>
               <Field label="Email" error={errors.email}>
                 <input
-                  type="email"
+                  type="text"
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
-                  placeholder="john@example.com"
+                  onBlur={(e) => validateField("email", e.target.value)}
+                  placeholder="example@mail.com"
                   className={inputClass(errors.email)}
                 />
               </Field>
