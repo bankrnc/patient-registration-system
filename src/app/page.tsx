@@ -1,65 +1,438 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+import { useState, useEffect, useCallback, useRef } from "react";
+import { PatientFormData, EMPTY_FORM } from "@/types/patient";
+import { EVENT_FORM_UPDATE, EVENT_STATUS_CHANGE } from "@/lib/pusher-client";
+
+const SESSION_ID =
+  typeof window !== "undefined"
+    ? (sessionStorage.getItem("sessionId") ?? crypto.randomUUID())
+    : "ssr";
+
+if (typeof window !== "undefined") {
+  sessionStorage.setItem("sessionId", SESSION_ID);
+}
+
+const LANGUAGES = [
+  "Thai",
+  "English",
+  "Chinese",
+  "Japanese",
+  "Korean",
+  "Arabic",
+  "French",
+  "German",
+  "Spanish",
+  "Other",
+];
+
+const NATIONALITIES = [
+  "Thai",
+  "American",
+  "British",
+  "Chinese",
+  "Japanese",
+  "Korean",
+  "Indian",
+  "Australian",
+  "Canadian",
+  "Other",
+];
+
+const RELIGIONS = [
+  "Buddhism",
+  "Christianity",
+  "Islam",
+  "Hinduism",
+  "Sikhism",
+  "Judaism",
+  "Atheism",
+  "Other",
+];
+
+interface FormErrors {
+  [key: string]: string;
+}
+
+export default function PatientForm() {
+  const [form, setForm] = useState<PatientFormData>(EMPTY_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerPusher = useCallback(async (event: string, data: unknown) => {
+    await fetch("/api/pusher", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, data }),
+    });
+  }, []);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(() => {
+      triggerPusher(EVENT_STATUS_CHANGE, {
+        sessionId: SESSION_ID,
+        status: "inactive",
+      });
+    }, 30000);
+  }, [triggerPusher]);
+
+  const handleChange = useCallback(
+    (field: keyof PatientFormData, value: string) => {
+      setForm((prev) => {
+        const updated = { ...prev, [field]: value };
+        triggerPusher(EVENT_FORM_UPDATE, {
+          sessionId: SESSION_ID,
+          data: updated,
+          lastUpdated: new Date().toISOString(),
+        });
+        return updated;
+      });
+
+      triggerPusher(EVENT_STATUS_CHANGE, {
+        sessionId: SESSION_ID,
+        status: "filling",
+      });
+
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+      resetInactivityTimer();
+    },
+    [triggerPusher, resetInactivityTimer],
+  );
+
+  useEffect(() => {
+    triggerPusher(EVENT_STATUS_CHANGE, {
+      sessionId: SESSION_ID,
+      status: "filling",
+    });
+    resetInactivityTimer();
+
+    return () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [triggerPusher, resetInactivityTimer]);
+
+  const validate = (): boolean => {
+    const newErrors: FormErrors = {};
+
+    if (!form.firstName.trim()) newErrors.firstName = "First name is required";
+    if (!form.lastName.trim()) newErrors.lastName = "Last name is required";
+    if (!form.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
+    if (!form.gender) newErrors.gender = "Gender is required";
+    if (!form.phoneNumber.trim()) {
+      newErrors.phoneNumber = "Phone number is required";
+    } else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phoneNumber)) {
+      newErrors.phoneNumber = "Enter a valid phone number";
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = "Enter a valid email address";
+    }
+    if (!form.address.trim()) newErrors.address = "Address is required";
+    if (!form.preferredLanguage)
+      newErrors.preferredLanguage = "Preferred language is required";
+    if (!form.nationality) newErrors.nationality = "Nationality is required";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    setSubmitting(true);
+    await triggerPusher(EVENT_STATUS_CHANGE, {
+      sessionId: SESSION_ID,
+      status: "submitted",
+    });
+    await triggerPusher(EVENT_FORM_UPDATE, {
+      sessionId: SESSION_ID,
+      data: form,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    setSubmitting(false);
+    setSubmitted(true);
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg
+              className="w-10 h-10 text-green-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            Form Submitted!
+          </h2>
+          <p className="text-gray-500">
+            Your information has been received. Thank you.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 py-10 px-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-indigo-700">
+            Patient Registration
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Please fill in your personal details below
+          </p>
         </div>
-      </main>
+
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6"
+        >
+          {/* Name Section */}
+          <section>
+            <h2 className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-4">
+              Personal Information
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="First Name" required error={errors.firstName}>
+                <input
+                  type="text"
+                  value={form.firstName}
+                  onChange={(e) => handleChange("firstName", e.target.value)}
+                  placeholder="Somsri"
+                  className={inputClass(errors.firstName)}
+                />
+              </Field>
+              <Field label="Middle Name">
+                <input
+                  type="text"
+                  value={form.middleName}
+                  onChange={(e) => handleChange("middleName", e.target.value)}
+                  placeholder="Optional"
+                  className={inputClass()}
+                />
+              </Field>
+              <Field label="Last Name" required error={errors.lastName}>
+                <input
+                  type="text"
+                  value={form.lastName}
+                  onChange={(e) => handleChange("lastName", e.target.value)}
+                  placeholder="Yay"
+                  className={inputClass(errors.lastName)}
+                />
+              </Field>
+            </div>
+          </section>
+
+          {/* Basic Info */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Date of Birth" required error={errors.dateOfBirth}>
+              <input
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) => handleChange("dateOfBirth", e.target.value)}
+                max={new Date().toISOString().split("T")[0]}
+                className={inputClass(errors.dateOfBirth)}
+              />
+            </Field>
+            <Field label="Gender" required error={errors.gender}>
+              <select
+                value={form.gender}
+                onChange={(e) => handleChange("gender", e.target.value)}
+                className={inputClass(errors.gender)}
+              >
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="non-binary">Non-binary</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
+              </select>
+            </Field>
+          </section>
+
+          {/* Contact */}
+          <section>
+            <h2 className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-4">
+              Contact Information
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Phone Number" required error={errors.phoneNumber}>
+                <input
+                  type="tel"
+                  value={form.phoneNumber}
+                  onChange={(e) => handleChange("phoneNumber", e.target.value)}
+                  placeholder="+66 8X XXX XXXX"
+                  className={inputClass(errors.phoneNumber)}
+                />
+              </Field>
+              <Field label="Email" error={errors.email}>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => handleChange("email", e.target.value)}
+                  placeholder="john@example.com"
+                  className={inputClass(errors.email)}
+                />
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field label="Address" required error={errors.address}>
+                <textarea
+                  value={form.address}
+                  onChange={(e) => handleChange("address", e.target.value)}
+                  placeholder="123 Main St, City, Country"
+                  rows={3}
+                  className={inputClass(errors.address)}
+                />
+              </Field>
+            </div>
+          </section>
+
+          {/* Background */}
+          <section>
+            <h2 className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-4">
+              Background
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field
+                label="Preferred Language"
+                required
+                error={errors.preferredLanguage}
+              >
+                <select
+                  value={form.preferredLanguage}
+                  onChange={(e) =>
+                    handleChange("preferredLanguage", e.target.value)
+                  }
+                  className={inputClass(errors.preferredLanguage)}
+                >
+                  <option value="">Select language</option>
+                  {LANGUAGES.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Nationality" required error={errors.nationality}>
+                <select
+                  value={form.nationality}
+                  onChange={(e) => handleChange("nationality", e.target.value)}
+                  className={inputClass(errors.nationality)}
+                >
+                  <option value="">Select nationality</option>
+                  {NATIONALITIES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Religion">
+                <select
+                  value={form.religion}
+                  onChange={(e) => handleChange("religion", e.target.value)}
+                  className={inputClass()}
+                >
+                  <option value="">Select religion (optional)</option>
+                  {RELIGIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </section>
+
+          {/* Emergency Contact */}
+          <section>
+            <h2 className="text-sm font-semibold text-indigo-500 uppercase tracking-wider mb-4">
+              Emergency Contact{" "}
+              <span className="text-gray-400 font-normal">(Optional)</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Contact Name">
+                <input
+                  type="text"
+                  value={form.emergencyContactName}
+                  onChange={(e) =>
+                    handleChange("emergencyContactName", e.target.value)
+                  }
+                  placeholder="Jane Doe"
+                  className={inputClass()}
+                />
+              </Field>
+              <Field label="Relationship">
+                <input
+                  type="text"
+                  value={form.emergencyContactRelationship}
+                  onChange={(e) =>
+                    handleChange("emergencyContactRelationship", e.target.value)
+                  }
+                  placeholder="Spouse, Parent, Sibling..."
+                  className={inputClass()}
+                />
+              </Field>
+            </div>
+          </section>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-xl transition-colors duration-200 text-base"
+          >
+            {submitting ? "Submitting..." : "Submit Registration"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function inputClass(error?: string) {
+  return `w-full px-4 py-2.5 rounded-lg border text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 transition-colors ${
+    error
+      ? "border-red-400 focus:ring-red-300 bg-red-50"
+      : "border-gray-300 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
+  }`;
+}
+
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }
